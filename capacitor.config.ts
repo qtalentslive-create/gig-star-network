@@ -1,27 +1,23 @@
-import { CapacitorConfig } from '@capacitor/cli';
+import { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: 'app.lovable.30805a07d18244079e99e52ac842dc71',
-  appName: 'qtalent',
-  webDir: 'dist',
-  server: {
-    url: 'https://30805a07-d182-4407-9e99-e52ac842dc71.lovableproject.com?forceHideBadge=true',
-    cleartext: true,
-    androidScheme: 'https'
-  },
+  appId: "live.qtalent.app",
+  appName: "qtalent",
+  webDir: "dist",
+
   android: {
     allowMixedContent: false,
     captureInput: true,
-    webContentsDebuggingEnabled: true
+    webContentsDebuggingEnabled: true,
   },
   plugins: {
     SplashScreen: {
       launchShowDuration: 2000,
-      backgroundColor: '#0A0118',
+      backgroundColor: "#0A0118",
       showSpinner: false,
     },
     PushNotifications: {
-      presentationOptions: ['badge', 'sound', 'alert']
+      presentationOptions: ["badge", "sound", "alert"],
     },
     LocalNotifications: {
       smallIcon: "ic_stat_icon_config_sample",
@@ -30,9 +26,9 @@ const config: CapacitorConfig = {
     Keyboard: {
       resize: "native",
       style: "dark",
-      resizeOnFullScreen: true
-    }
-  }
+      resizeOnFullScreen: true,
+    },
+  },
 };
 
 export default config;
