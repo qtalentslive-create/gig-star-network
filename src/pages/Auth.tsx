@@ -6,12 +6,19 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useEmailNotifications } from "@/hooks/useEmailNotifications";
 import { ArrowLeft, Mail } from "lucide-react";
+import { registerDeviceForNotifications } from "@/hooks/usePushNotifications";
 
 const Auth = () => {
   const [email, setEmail] = useState("");
@@ -19,7 +26,9 @@ const Auth = () => {
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
-  const [authMethod, setAuthMethod] = useState<"password" | "magiclink">("password");
+  const [authMethod, setAuthMethod] = useState<"password" | "magiclink">(
+    "password"
+  );
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
@@ -38,28 +47,31 @@ const Auth = () => {
     intent === "booking-form"
       ? "Sign in to complete your booking request"
       : intent === "event-form"
-        ? "Sign in to get personalized recommendations"
-        : null;
+      ? "Sign in to get personalized recommendations"
+      : null;
 
   // Store intent in localStorage when component mounts
   useEffect(() => {
     if (intent) {
-      localStorage.setItem('authIntent', intent);
+      localStorage.setItem("authIntent", intent);
     }
   }, [intent]);
 
   useEffect(() => {
     if (!authLoading && user) {
       // 🔐 Check sessionStorage flag for password recovery
-      const isPasswordRecovery = sessionStorage.getItem('isPasswordRecovery') === 'true';
-      
+      const isPasswordRecovery =
+        sessionStorage.getItem("isPasswordRecovery") === "true";
+
       if (isPasswordRecovery) {
-        console.log("[Auth] Password recovery flag detected - skipping redirect");
+        console.log(
+          "[Auth] Password recovery flag detected - skipping redirect"
+        );
         return;
       }
-      
+
       // Redirect users away from auth pages
-      if (window.location.pathname.startsWith('/auth')) {
+      if (window.location.pathname.startsWith("/auth")) {
         navigate("/");
       }
     }
@@ -91,7 +103,11 @@ const Auth = () => {
     }
 
     // Signin with password method requires password
-    if (!isSignUp && authMethod === "password" && (!password || password.length < 6)) {
+    if (
+      !isSignUp &&
+      authMethod === "password" &&
+      (!password || password.length < 6)
+    ) {
       toast({
         title: "Password required",
         description: "Please enter your password (minimum 6 characters).",
@@ -105,15 +121,19 @@ const Auth = () => {
 
     try {
       // Check email via edge function
-      const { data: emailCheck } = await supabase.functions.invoke("check-email-exists", {
-        body: { email: email.toLowerCase().trim() },
-      });
+      const { data: emailCheck } = await supabase.functions.invoke(
+        "check-email-exists",
+        {
+          body: { email: email.toLowerCase().trim() },
+        }
+      );
 
       // For sign up - check if user exists
       if (isSignUp && emailCheck?.exists) {
         toast({
           title: "Account already exists! 🔑",
-          description: "This email is already registered. Please switch to 'Sign In' tab to access your account.",
+          description:
+            "This email is already registered. Please switch to 'Sign In' tab to access your account.",
           variant: "destructive",
           duration: 6000,
         });
@@ -125,7 +145,8 @@ const Auth = () => {
       if (!isSignUp && !emailCheck?.exists) {
         toast({
           title: "Account not found 🔍",
-          description: "No account found with this email. Please switch to 'Sign Up' tab to create an account.",
+          description:
+            "No account found with this email. Please switch to 'Sign Up' tab to create an account.",
           variant: "destructive",
           duration: 6000,
         });
@@ -133,48 +154,58 @@ const Auth = () => {
         return;
       }
 
-      let error: any = null;
+      let error: unknown = null;
 
       if (isSignUp) {
         // Signup with minimal metadata
-        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-          email: email.toLowerCase().trim(),
-          password: password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback`,
-            data: { name: name, user_type: userType },
-          },
-        });
+        const { data: signUpData, error: signUpError } =
+          await supabase.auth.signUp({
+            email: email.toLowerCase().trim(),
+            password: password,
+            options: {
+              emailRedirectTo: `${window.location.origin}/auth/callback`,
+              data: { name: name, user_type: userType },
+            },
+          });
         error = signUpError;
 
         if (!error && signUpData.user) {
+          registerDeviceForNotifications(signUpData.user.id);
           // Send welcome emails in background (non-blocking)
-          sendUserSignupEmails(signUpData.user.id, name, email.toLowerCase().trim()).catch(err => 
-            console.error("Failed to send welcome email:", err)
-          );
+          sendUserSignupEmails(
+            signUpData.user.id,
+            name,
+            email.toLowerCase().trim()
+          ).catch((err) => console.error("Failed to send welcome email:", err));
 
           // Check for event-form intent and redirect accordingly
-          const authIntent = localStorage.getItem('authIntent');
-          const bookingIntent = localStorage.getItem('bookingIntent');
-          
+          const authIntent = localStorage.getItem("authIntent");
+          const bookingIntent = localStorage.getItem("bookingIntent");
+
           toast({
             title: "🎉 Welcome to Qtalent!",
-            description: authIntent === 'event-form' 
-              ? "Redirecting you to find the perfect talent for your event..."
-              : bookingIntent 
-                ? `Redirecting you to book ${JSON.parse(bookingIntent).talentName}...`
+            description:
+              authIntent === "event-form"
+                ? "Redirecting you to find the perfect talent for your event..."
+                : bookingIntent
+                ? `Redirecting you to book ${
+                    JSON.parse(bookingIntent).talentName
+                  }...`
                 : "Redirecting you to your dashboard...",
             duration: 3000,
           });
 
           setTimeout(() => {
-            if (authIntent === 'event-form') {
-              localStorage.removeItem('authIntent');
-              navigate('/your-event', { replace: true });
+            if (authIntent === "event-form") {
+              localStorage.removeItem("authIntent");
+              navigate("/your-event", { replace: true });
             } else if (bookingIntent) {
               const { talentId } = JSON.parse(bookingIntent);
-              localStorage.removeItem('bookingIntent');
-              navigate(`/talent/${talentId}`, { state: { openBookingForm: true }, replace: true });
+              localStorage.removeItem("bookingIntent");
+              navigate(`/talent/${talentId}`, {
+                state: { openBookingForm: true },
+                replace: true,
+              });
             } else {
               navigate(state?.from?.pathname || "/", { replace: true });
             }
@@ -183,34 +214,54 @@ const Auth = () => {
       } else {
         // Signin can use password OR magic link
         if (authMethod === "password") {
-          const { error: signInError } = await supabase.auth.signInWithPassword({
-            email: email.toLowerCase().trim(),
-            password: password,
-          });
+          const { error: signInError } = await supabase.auth.signInWithPassword(
+            {
+              email: email.toLowerCase().trim(),
+              password: password,
+            }
+          );
           error = signInError;
 
           if (!error) {
+            // Get the user who just signed in to register their device
+            const {
+              data: { user },
+            } = await supabase.auth.getUser();
+            if (user) {
+              registerDeviceForNotifications(user.id);
+            }
+            // ▲▲▲ END OF FIX ▲▲▲
             // Check for event-form intent and redirect accordingly
-            const authIntent = localStorage.getItem('authIntent');
-            const bookingIntent = localStorage.getItem('bookingIntent');
-            
-            if (authIntent === 'event-form') {
-              localStorage.removeItem('authIntent');
+            const authIntent = localStorage.getItem("authIntent");
+            const bookingIntent = localStorage.getItem("bookingIntent");
+
+            if (authIntent === "event-form") {
+              localStorage.removeItem("authIntent");
               toast({
                 title: "Welcome! 🎉",
                 description: "Let's find the perfect talent for your event.",
                 duration: 4000,
               });
-              setTimeout(() => navigate('/your-event', { replace: true }), 1000);
+              setTimeout(
+                () => navigate("/your-event", { replace: true }),
+                1000
+              );
             } else if (bookingIntent) {
               const { talentId, talentName } = JSON.parse(bookingIntent);
-              localStorage.removeItem('bookingIntent');
+              localStorage.removeItem("bookingIntent");
               toast({
                 title: "Welcome back! 👋",
                 description: `Let's book ${talentName} for your event.`,
                 duration: 4000,
               });
-              setTimeout(() => navigate(`/talent/${talentId}`, { state: { openBookingForm: true }, replace: true }), 1000);
+              setTimeout(
+                () =>
+                  navigate(`/talent/${talentId}`, {
+                    state: { openBookingForm: true },
+                    replace: true,
+                  }),
+                1000
+              );
             } else {
               toast({
                 title: "Welcome back! 👋",
@@ -235,7 +286,8 @@ const Auth = () => {
           if (!error) {
             toast({
               title: "Check your email! 📧",
-              description: "Magic link sent! Check your inbox and spam folder (may take 1-2 minutes).",
+              description:
+                "Magic link sent! Check your inbox and spam folder (may take 1-2 minutes).",
               duration: 8000,
             });
             setEmailSent(true);
@@ -245,18 +297,24 @@ const Auth = () => {
 
       if (error) {
         console.error("Auth error:", error);
-        let errorMessage = error.message;
+        let errorMessage =
+          error instanceof Error ? error.message : "An unknown error occurred";
         let errorTitle = "Authentication failed";
 
-        if (error.message.includes("Invalid login credentials")) {
-          errorTitle = "Incorrect password 🔒";
-          errorMessage = "The password you entered is incorrect. Please try again.";
-        } else if (error.message.includes("Email not confirmed")) {
-          errorTitle = "Email not verified 📧";
-          errorMessage = "Please check your email and click the verification link first.";
-        } else if (error.message.includes("already registered")) {
-          errorTitle = "Account exists! 🔑";
-          errorMessage = "This email is already registered. Use 'Sign In' tab instead.";
+        if (error instanceof Error) {
+          if (error.message.includes("Invalid login credentials")) {
+            errorTitle = "Incorrect password 🔒";
+            errorMessage =
+              "The password you entered is incorrect. Please try again.";
+          } else if (error.message.includes("Email not confirmed")) {
+            errorTitle = "Email not verified 📧";
+            errorMessage =
+              "Please check your email and click the verification link first.";
+          } else if (error.message.includes("already registered")) {
+            errorTitle = "Account exists! 🔑";
+            errorMessage =
+              "This email is already registered. Use 'Sign In' tab instead.";
+          }
         }
 
         toast({
@@ -266,7 +324,7 @@ const Auth = () => {
           duration: 6000,
         });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Unexpected auth error:", error);
       toast({
         title: "Error",
@@ -293,7 +351,9 @@ const Auth = () => {
           <Mail className="mx-auto h-12 w-12 text-primary" />
           <h1 className="mt-4 text-2xl font-bold">📧 Check Your Email</h1>
           <div className="space-y-2">
-            <p className="text-muted-foreground">A magic link has been sent to</p>
+            <p className="text-muted-foreground">
+              A magic link has been sent to
+            </p>
             <p className="font-semibold text-lg">{email}</p>
           </div>
           <div className="bg-primary/10 p-4 rounded-lg border border-primary/20 text-left">
@@ -302,11 +362,18 @@ const Auth = () => {
               <li>Check your inbox and spam folder</li>
               <li>The email may take 1-2 minutes to arrive</li>
               <li>Click the link to complete sign in</li>
-              <li>If you already have an account, you'll be signed in automatically</li>
+              <li>
+                If you already have an account, you'll be signed in
+                automatically
+              </li>
             </ul>
           </div>
 
-          <Button variant="ghost" onClick={() => navigate("/")} className="mt-6">
+          <Button
+            variant="ghost"
+            onClick={() => navigate("/")}
+            className="mt-6"
+          >
             <ArrowLeft className="h-4 w-4 mr-2" /> Back to Home
           </Button>
         </div>
@@ -315,43 +382,44 @@ const Auth = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-2 sm:p-4">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <Button
           type="button"
           variant="ghost"
-          size="sm"
           onClick={(e) => {
             e.preventDefault();
             navigate("/");
           }}
-          className="mb-2 sm:mb-4"
+          className="mb-4"
         >
           <ArrowLeft className="h-4 w-4 mr-2" /> Go Back
         </Button>
-        <Card className="mobile-auth-card">
-          <CardHeader className="text-center p-3 sm:p-6">
-            <CardTitle className="text-lg sm:text-2xl">{title}</CardTitle>
-            <CardDescription className="text-xs sm:text-sm">{description}</CardDescription>
+        <Card>
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl">{title}</CardTitle>
+            <CardDescription>{description}</CardDescription>
 
             {/* Email Verification Message */}
             {verificationMessage && (
-              <div className="mt-3 sm:mt-4 space-y-2 sm:space-y-3">
-                <div className="p-2 sm:p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
-                  <div className="flex items-start gap-2 sm:gap-3">
-                    <Mail className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+              <div className="mt-4 space-y-3">
+                <div className="p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg border-2 border-blue-200 dark:border-blue-800">
+                  <div className="flex items-start gap-3">
+                    <Mail className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
                     <div className="text-left">
-                      <p className="text-xs sm:text-sm font-semibold text-blue-900 dark:text-blue-100 mb-1">
+                      <p className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-1">
                         📧 Email Verification Required
                       </p>
-                      <p className="text-xs sm:text-sm text-blue-800 dark:text-blue-200">{verificationMessage}</p>
-                      <p className="text-[10px] sm:text-xs text-blue-700 dark:text-blue-300 mt-1 sm:mt-2">
+                      <p className="text-sm text-blue-800 dark:text-blue-200">
+                        {verificationMessage}
+                      </p>
+                      <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">
                         After verifying your email, return here to sign in.
                       </p>
                     </div>
                   </div>
                 </div>
-                
+
                 {/* Resend Verification Email Button */}
                 {state?.showResendButton && state?.email && (
                   <Button
@@ -360,22 +428,26 @@ const Auth = () => {
                       try {
                         setLoading(true);
                         const { error } = await supabase.auth.resend({
-                          type: 'signup',
+                          type: "signup",
                           email: state.email,
                         });
-                        
+
                         if (error) throw error;
-                        
+
                         toast({
                           title: "Email Resent! 📧",
-                          description: "Check your inbox again. It may take a few minutes to arrive.",
-                          duration: 5000
+                          description:
+                            "Check your inbox again. It may take a few minutes to arrive.",
+                          duration: 5000,
                         });
-                      } catch (error: any) {
+                      } catch (error: unknown) {
                         toast({
                           title: "Error",
-                          description: error.message || "Failed to resend email.",
-                          variant: "destructive"
+                          description:
+                            error instanceof Error
+                              ? error.message
+                              : "Failed to resend email.",
+                          variant: "destructive",
                         });
                       } finally {
                         setLoading(false);
@@ -391,19 +463,22 @@ const Auth = () => {
             )}
 
             {intentMessage && !verificationMessage && (
-              <div className="mt-2 sm:mt-3 p-2 sm:p-3 bg-primary/10 rounded-lg border border-primary/20">
-                <p className="text-xs sm:text-sm font-medium text-primary mb-1 sm:mb-2">{intentMessage}</p>
-                <p className="text-[10px] sm:text-xs text-muted-foreground">
-                  ✨ <strong>New here?</strong> Switch to the "Sign Up" tab to create your account first!
+              <div className="mt-3 p-3 bg-primary/10 rounded-lg border border-primary/20">
+                <p className="text-sm font-medium text-primary mb-2">
+                  {intentMessage}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  ✨ <strong>New here?</strong> Switch to the "Sign Up" tab to
+                  create your account first!
                 </p>
               </div>
             )}
           </CardHeader>
-          <CardContent className="p-3 sm:p-6">
+          <CardContent>
             <Tabs defaultValue="login" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 h-9 sm:h-10">
-                <TabsTrigger value="login" className="text-xs sm:text-sm">Sign In</TabsTrigger>
-                <TabsTrigger value="signup" className="text-xs sm:text-sm">Sign Up</TabsTrigger>
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="login">Sign In</TabsTrigger>
+                <TabsTrigger value="signup">Sign Up</TabsTrigger>
               </TabsList>
               <TabsContent value="login">
                 <form
@@ -411,27 +486,33 @@ const Auth = () => {
                     e.preventDefault();
                     handleAuthAction(false);
                   }}
-                  className="space-y-3 sm:space-y-4 pt-3 sm:pt-4"
+                  className="space-y-4 pt-4"
                 >
-                  <div className="space-y-2 sm:space-y-4 p-2 sm:p-4 bg-muted/30 rounded-lg border">
+                  <div className="space-y-4 p-4 bg-muted/30 rounded-lg border">
                     <div className="flex items-center justify-between">
-                      <Label className="text-xs sm:text-sm font-medium">Sign In Method</Label>
-                      <div className="flex gap-1 sm:gap-2">
+                      <Label className="text-sm font-medium">
+                        Sign In Method
+                      </Label>
+                      <div className="flex flex-wrap justify-end gap-2">
                         <Button
                           type="button"
                           size="sm"
-                          variant={authMethod === "password" ? "default" : "outline"}
+                          variant={
+                            authMethod === "password" ? "default" : "outline"
+                          }
                           onClick={() => setAuthMethod("password")}
-                          className="text-[10px] sm:text-xs px-2 sm:px-3 h-7 sm:h-9"
+                          className="text-xs is-small-toggle" /* 👈 ADD THIS CLASS */
                         >
                           🔑 Password
                         </Button>
                         <Button
                           type="button"
                           size="sm"
-                          variant={authMethod === "magiclink" ? "default" : "outline"}
+                          variant={
+                            authMethod === "magiclink" ? "default" : "outline"
+                          }
                           onClick={() => setAuthMethod("magiclink")}
-                          className="text-[10px] sm:text-xs px-2 sm:px-3 h-7 sm:h-9"
+                          className="text-xs is-small-toggle" /* 👈 ADD THIS CLASS */
                         >
                           ✉️ Magic Link
                         </Button>
@@ -486,7 +567,11 @@ const Auth = () => {
                   </p>
 
                   <Button type="submit" disabled={loading} className="w-full">
-                    {loading ? "Signing In..." : authMethod === "password" ? "Sign In" : "Send Magic Link"}
+                    {loading
+                      ? "Signing In..."
+                      : authMethod === "password"
+                      ? "Sign In"
+                      : "Send Magic Link"}
                   </Button>
                 </form>
               </TabsContent>
@@ -532,11 +617,14 @@ const Auth = () => {
                       required
                       minLength={6}
                     />
-                    <p className="text-xs text-muted-foreground">Minimum 6 characters required</p>
+                    <p className="text-xs text-muted-foreground">
+                      Minimum 6 characters required
+                    </p>
                   </div>
 
                   <p className="text-xs text-muted-foreground">
-                    💡 Create a secure password to access your account. Already registered? Use "Sign In" tab
+                    💡 Create a secure password to access your account. Already
+                    registered? Use "Sign In" tab
                   </p>
 
                   <Button type="submit" disabled={loading} className="w-full">
