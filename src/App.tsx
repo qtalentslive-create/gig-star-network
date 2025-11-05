@@ -1,10 +1,17 @@
 // FILE: src/App.tsx
+// FINAL CORRECTED VERSION (With Navigation Hook)
 
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Routes, Route } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client"; // Ensure supabase is imported
+//
+// ▼▼▼ ADD THESE IMPORTS ▼▼▼
+//
+import { Routes, Route, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
+// ▲▲▲ END OF IMPORTS ▲▲▲
+//
+import { supabase } from "@/integrations/supabase/client";
 import { AuthProvider } from "./hooks/useAuth";
 import { UserModeProvider } from "./contexts/UserModeContext";
 import { ChatProvider } from "./contexts/ChatContext";
@@ -12,7 +19,7 @@ import { ProStatusProvider } from "./contexts/ProStatusContext";
 import { UniversalChat } from "./components/UniversalChat";
 import { PWAInstallPrompt } from "./components/PWAInstallPrompt";
 import { NotificationPermissionPrompt } from "./components/NotificationPermissionPrompt";
-import { UnifiedNotificationHandler } from "./components/UnifiedNotificationHandler";
+import { UnifiedNotificationHandler } from "./components/UnifiedNotificationhandler";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import BookerDashboard from "./pages/BookerDashboard";
@@ -42,15 +49,37 @@ import SubscriptionCancelled from "./pages/SubscriptionCancelled";
 // 🔐 Global auth listener with PASSWORD_RECOVERY detection
 supabase.auth.onAuthStateChange((event, session) => {
   console.log("Supabase Auth State Change Event:", { event, session });
-  
+
   // Set recovery flag when PASSWORD_RECOVERY event is detected
-  if (event === 'PASSWORD_RECOVERY') {
-    sessionStorage.setItem('isPasswordRecovery', 'true');
-    console.log("[App] PASSWORD_RECOVERY event detected globally - recovery flag set");
+  if (event === "PASSWORD_RECOVERY") {
+    sessionStorage.setItem("isPasswordRecovery", "true");
+    console.log(
+      "[App] PASSWORD_RECOVERY event detected globally - recovery flag set"
+    );
   }
 });
 
 const AppContent = () => {
+  //
+  // ▼▼▼ THIS IS THE FIX (Part 2) ▼▼▼
+  //
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // This code runs when the app starts or reloads
+    const pendingUrl = sessionStorage.getItem("pending_notification_url");
+    if (pendingUrl) {
+      console.log(`Found pending URL, navigating to: ${pendingUrl}`);
+      // Clear the URL from storage so we don't do it again
+      sessionStorage.removeItem("pending_notification_url");
+      // Use the app's router to navigate safely
+      navigate(pendingUrl);
+    }
+  }, [navigate]);
+  //
+  // ▲▲▲ END OF FIX ▲▲▲
+  //
+
   return (
     <div className="w-full max-w-full overflow-x-hidden">
       <Toaster />
@@ -100,7 +129,10 @@ const AppContent = () => {
         <Route path="/terms-of-service" element={<TermsOfService />} />
         <Route path="/trust-safety" element={<TrustSafety />} />
         <Route path="/subscription-success" element={<SubscriptionSuccess />} />
-        <Route path="/subscription-cancelled" element={<SubscriptionCancelled />} />
+        <Route
+          path="/subscription-cancelled"
+          element={<SubscriptionCancelled />}
+        />
         <Route path="/talent-onboarding" element={<TalentOnboarding />} />
         <Route
           path="/talent-dashboard"
